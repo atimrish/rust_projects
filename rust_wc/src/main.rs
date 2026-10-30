@@ -10,8 +10,8 @@ fn word_count(text: &str) -> usize {
 fn print_usage_description() {
     println!("Word counter");
     println!("Usage:");
-    println!("\t-h, --help print usage description");
-    println!("\t-t, --text <text> text to count words");
+    println!("\t-h, --help | print usage description");
+    println!("\t-t, --text <text> | text to count words");
 }
 
 fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
@@ -24,6 +24,11 @@ fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         }
         "-t" | "--text" => {
             let text = args.next().ok_or("No text given")?;
+
+            if args.next().is_some() {
+                return Err(String::from("Multiple words should be wrapped into quotes"));
+            };
+
             println!("Words: {}", word_count(&text));
             Ok(())
         }
