@@ -33,6 +33,20 @@ enum NumberValue {
     Float(f32),
 }
 
+fn parse_integer_slice(expression: &str, start: &usize, end: &usize) -> Result<i32, String> {
+    let integer_slice = &expression[*start..*end + 1];
+    integer_slice
+        .parse::<i32>()
+        .map_err(|_| format!("Error parse integer: {integer_slice}"))
+}
+
+fn parse_float_slice(expression: &str, start: &usize, end: &usize) -> Result<f32, String> {
+    let float_slice = &expression[*start..*end + 1];
+    float_slice
+        .parse::<f32>()
+        .map_err(|_| format!("Error parse float: {float_slice}"))
+}
+
 //TODO: Нужно посимвольно пробежаться по строке и распарсить ее
 fn calculate(expression: &str) -> Result<NumberValue, String> {
     let trimmed = expression.trim();
@@ -61,17 +75,26 @@ fn calculate(expression: &str) -> Result<NumberValue, String> {
         //TODO: need to implement
         if char.is_ascii_whitespace() {
             match program_state {
+                ProgramState::Started | ProgramState::Idle => (),
                 ProgramState::WaitingDigitAfterFloatPoint => {
                     return Err(String::from("Orphan point symbol found"));
                 }
-                ProgramState::Started
-                | ProgramState::Idle
-                | ProgramState::ParseFloat
-                | ProgramState::ParseInteger => {
+                ProgramState::ParseFloat => {
                     program_state = ProgramState::Idle;
-                    continue;
+                    parse_end_index = i;
+
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                }
+                ProgramState::ParseInteger => {
+                    program_state = ProgramState::Idle;
+                    parse_end_index = i;
+
+                    let integer =
+                        parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
                 }
             }
+
+            continue;
         }
 
         if char == '.' {
@@ -127,25 +150,23 @@ fn calculate(expression: &str) -> Result<NumberValue, String> {
         return Err(format!("Unexpected character: {char}"));
     }
 
-    let number_slice = &trimmed[parse_start_index..parse_end_index + 1];
-
     //Calc the value
     match program_state {
         ProgramState::Started | ProgramState::Idle => Err(String::from("No expression given")),
-        ProgramState::ParseInteger => match number_slice.parse::<i32>() {
-            Ok(integer) => Ok(NumberValue::Integer(integer)),
-            Err(_) => Err(format!("Error parse value {number_slice} into i32")),
-        },
-        ProgramState::ParseFloat => match number_slice.parse::<f32>() {
-            Ok(float) => Ok(NumberValue::Float(float)),
-            Err(_) => Err(format!("Error parse value {number_slice} into f32")),
-        },
+        ProgramState::ParseInteger => {
+            parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)
+                .map(|v| Ok(NumberValue::Integer(v)))?
+        }
+        ProgramState::ParseFloat => {
+            parse_float_slice(trimmed, &parse_start_index, &parse_end_index)
+                .map(|v| Ok(NumberValue::Float(v)))?
+        }
         ProgramState::WaitingDigitAfterFloatPoint => Err(String::from("Orphan point symbol found")),
     }
 }
 
 fn main() -> ExitCode {
-    let expression = "0.1";
+    let expression = "1";
 
     match calculate(expression) {
         Ok(value) => {
