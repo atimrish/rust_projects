@@ -1,11 +1,21 @@
 use std::process::ExitCode;
 
-enum MathExpressionNumber {
-    Integer,
-    Float,
+use crate::Number::Integer;
+
+#[derive(Eq, PartialEq)]
+enum ProgramState {
+    Started,
+    ProcessingInteger,
+    FinishedInteger,
+    ProcessingFloat,
+    FinishedFloat,
+    WaitingAfterNegation,
+    WaitingAfterFloatPoint,
+    WaitingAfterOpenBrace,
+    WaitingAfterOperator,
 }
 
-enum MathExpressionOperator {
+enum Operator {
     Addition,
     Subtraction,
     Multiplication,
@@ -14,23 +24,20 @@ enum MathExpressionOperator {
     Negation,
 }
 
-enum MathExpressionElement {
-    Number(MathExpressionNumber),
-    Operator(MathExpressionOperator),
+enum Brace {
+    Start,
+    End,
 }
 
-#[derive(Eq, PartialEq)]
-enum ProgramState {
-    Started,
-    Idle,
-    ParseInteger,
-    ParseFloat,
-    WaitingDigitAfterFloatPoint,
-}
-
-enum NumberValue {
+enum Number {
     Integer(i32),
     Float(f32),
+}
+
+enum Primitive {
+    Number(Number),
+    Operator(Operator),
+    Brace(Brace),
 }
 
 fn parse_integer_slice(expression: &str, start: &usize, end: &usize) -> Result<i32, String> {
@@ -47,134 +54,392 @@ fn parse_float_slice(expression: &str, start: &usize, end: &usize) -> Result<f32
         .map_err(|_| format!("Error parse float: {float_slice}"))
 }
 
-//TODO: Нужно посимвольно пробежаться по строке и распарсить ее
-fn calculate(expression: &str) -> Result<NumberValue, String> {
-    let trimmed = expression.trim();
+fn display_primitives(primitives: &Vec<Primitive>) {
+    primitives.iter().for_each(|item| {
+        let string_view: String = match item {
+            Primitive::Brace(brace) => match brace {
+                Brace::Start => "BraceStart".to_string(),
+                Brace::End => "BraceEnd".to_string(),
+            },
+            Primitive::Number(number) => match number {
+                Number::Float(float) => format!("Float({float})"),
+                Number::Integer(integer) => format!("Integer({integer})"),
+            },
+            Primitive::Operator(operator) => match operator {
+                Operator::Addition => "Addition".to_string(),
+                Operator::Subtraction => "Subtraction".to_string(),
+                Operator::Multiplication => "Multiplication".to_string(),
+                Operator::Division => "Division".to_string(),
+                Operator::Negation => "Negation".to_string(),
+                Operator::Exponentiation => "Exponentiation".to_string(),
+            },
+        };
 
+        print!("{} ", string_view);
+    });
+    println!();
+}
+
+//TODO: Нужно посимвольно пробежаться по строке и распарсить ее
+fn calculate(expression: &str) -> Result<Number, String> {
+    let trimmed = expression.trim();
+    let mut primitives: Vec<Primitive> = Vec::new();
     let mut program_state: ProgramState = ProgramState::Started;
     let mut parse_start_index: usize = 0;
     let mut parse_end_index: usize = 0;
 
     for (i, char) in trimmed.chars().enumerate() {
-        if char.is_ascii_digit() {
-            match program_state {
-                ProgramState::Started | ProgramState::Idle => {
-                    program_state = ProgramState::ParseInteger;
+        match program_state {
+            ProgramState::Started => {
+                if char == '-' {
+                    primitives.push(Primitive::Operator(Operator::Negation));
+                    program_state = ProgramState::WaitingAfterNegation;
+                    continue;
+                }
+
+                if char.is_ascii_digit() {
                     parse_start_index = i;
+                    program_state = ProgramState::ProcessingInteger;
+                    continue;
                 }
-                ProgramState::WaitingDigitAfterFloatPoint => {
-                    program_state = ProgramState::ParseFloat;
-                }
-                ProgramState::ParseInteger | ProgramState::ParseFloat => (),
-            };
 
-            parse_end_index = i;
-            continue;
-        }
-
-        //TODO: need to implement
-        if char.is_ascii_whitespace() {
-            match program_state {
-                ProgramState::Started | ProgramState::Idle => (),
-                ProgramState::WaitingDigitAfterFloatPoint => {
-                    return Err(String::from("Orphan point symbol found"));
+                if char == '(' {
+                    primitives.push(Primitive::Brace(Brace::Start));
+                    program_state = ProgramState::WaitingAfterOpenBrace;
+                    continue;
                 }
-                ProgramState::ParseFloat => {
-                    program_state = ProgramState::Idle;
+            }
+            ProgramState::ProcessingInteger => {
+                if char.is_ascii_digit() {
                     parse_end_index = i;
-
-                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    continue;
                 }
-                ProgramState::ParseInteger => {
-                    program_state = ProgramState::Idle;
-                    parse_end_index = i;
+
+                if char == '.' {
+                    program_state = ProgramState::WaitingAfterFloatPoint;
+                    continue;
+                }
+
+                if char.is_ascii_whitespace() {
+                    program_state = ProgramState::FinishedInteger;
+                    let integer =
+                        parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Integer(integer)));
+                    continue;
+                }
+
+                if char == '(' {
+                    program_state = ProgramState::WaitingAfterOpenBrace;
 
                     let integer =
                         parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
-                }
-            }
-
-            continue;
-        }
-
-        if char == '.' {
-            match program_state {
-                ProgramState::ParseInteger => {
-                    program_state = ProgramState::WaitingDigitAfterFloatPoint;
+                    primitives.push(Primitive::Number(Number::Integer(integer)));
+                    primitives.push(Primitive::Brace(Brace::Start));
                     continue;
                 }
-                ProgramState::Started
-                | ProgramState::Idle
-                | ProgramState::ParseFloat
-                | ProgramState::WaitingDigitAfterFloatPoint => {
-                    return Err(String::from("Unexpected point symbol"));
+
+                if char == '+' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let integer =
+                        parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Integer(integer)));
+                    primitives.push(Primitive::Operator(Operator::Addition));
+                    continue;
+                }
+
+                if char == '-' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let integer =
+                        parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Integer(integer)));
+                    primitives.push(Primitive::Operator(Operator::Subtraction));
+                    continue;
+                }
+
+                if char == '*' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let integer =
+                        parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Integer(integer)));
+                    primitives.push(Primitive::Operator(Operator::Multiplication));
+                    continue;
+                }
+
+                if char == '/' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let integer =
+                        parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Integer(integer)));
+                    primitives.push(Primitive::Operator(Operator::Division));
+                    continue;
+                }
+
+                if char == '^' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let integer =
+                        parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Integer(integer)));
+                    primitives.push(Primitive::Operator(Operator::Exponentiation));
+                    continue;
                 }
             }
-        }
+            ProgramState::FinishedInteger => {
+                if char.is_ascii_whitespace() {
+                    continue;
+                }
 
-        //TODO: need to implement
-        if char == '+' {
-            return Ok(NumberValue::Integer(1));
-        }
+                if char == '(' {
+                    program_state = ProgramState::WaitingAfterOpenBrace;
+                    primitives.push(Primitive::Brace(Brace::Start));
+                    continue;
+                }
 
-        //TODO: need to implement
-        if char == '-' {
-            return Ok(NumberValue::Integer(1));
-        }
+                if char == '+' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Addition));
+                    continue;
+                }
 
-        //TODO: need to implement
-        if char == '*' {
-            return Ok(NumberValue::Integer(1));
-        }
+                if char == '-' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Subtraction));
+                    continue;
+                }
 
-        //TODO: need to implement
-        if char == '/' {
-            return Ok(NumberValue::Integer(1));
-        }
+                if char == '*' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Multiplication));
+                    continue;
+                }
 
-        //TODO: need to implement
-        if char == '^' {
-            return Ok(NumberValue::Integer(1));
-        }
+                if char == '/' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Division));
+                    continue;
+                }
 
-        //TODO: need to implement
-        if char == '(' {
-            return Ok(NumberValue::Integer(1));
-        }
+                if char == '^' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Exponentiation));
+                    continue;
+                }
+            }
+            ProgramState::ProcessingFloat => {
+                if char.is_ascii_digit() {
+                    parse_end_index = i;
+                    continue;
+                }
 
-        //TODO: need to implement
-        if char == ')' {
-            return Ok(NumberValue::Integer(1));
-        }
+                if char.is_ascii_whitespace() {
+                    program_state = ProgramState::FinishedFloat;
 
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Float(float)));
+                    continue;
+                }
+
+                if char == '(' {
+                    program_state = ProgramState::WaitingAfterOpenBrace;
+
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Float(float)));
+                    primitives.push(Primitive::Brace(Brace::Start));
+                    continue;
+                }
+
+                if char == '+' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Float(float)));
+                    primitives.push(Primitive::Operator(Operator::Addition));
+                    continue;
+                }
+
+                if char == '-' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Float(float)));
+                    primitives.push(Primitive::Operator(Operator::Subtraction));
+                    continue;
+                }
+
+                if char == '*' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Float(float)));
+                    primitives.push(Primitive::Operator(Operator::Multiplication));
+                    continue;
+                }
+
+                if char == '/' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Float(float)));
+                    primitives.push(Primitive::Operator(Operator::Division));
+                    continue;
+                }
+
+                if char == '^' {
+                    program_state = ProgramState::WaitingAfterOperator;
+
+                    let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+                    primitives.push(Primitive::Number(Number::Float(float)));
+                    primitives.push(Primitive::Operator(Operator::Exponentiation));
+                    continue;
+                }
+            }
+            ProgramState::FinishedFloat => {
+                if char.is_ascii_whitespace() {
+                    continue;
+                }
+
+                if char == '(' {
+                    program_state = ProgramState::WaitingAfterOpenBrace;
+                    primitives.push(Primitive::Brace(Brace::Start));
+                    continue;
+                }
+
+                if char == '+' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Addition));
+                    continue;
+                }
+
+                if char == '-' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Subtraction));
+                    continue;
+                }
+
+                if char == '*' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Multiplication));
+                    continue;
+                }
+
+                if char == '/' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Division));
+                    continue;
+                }
+
+                if char == '^' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Exponentiation));
+                    continue;
+                }
+            }
+            ProgramState::WaitingAfterFloatPoint => {
+                if char.is_ascii_digit() {
+                    program_state = ProgramState::ProcessingFloat;
+                    parse_end_index = i;
+                    continue;
+                }
+            }
+            ProgramState::WaitingAfterNegation => {
+                if char.is_ascii_digit() {
+                    program_state = ProgramState::ProcessingInteger;
+                    parse_start_index = i;
+                    continue;
+                }
+
+                if char == '(' {
+                    program_state = ProgramState::WaitingAfterOpenBrace;
+
+                    primitives.push(Primitive::Brace(Brace::Start));
+                    continue;
+                }
+            }
+            ProgramState::WaitingAfterOpenBrace => {
+                if char.is_ascii_digit() {
+                    program_state = ProgramState::ProcessingInteger;
+                    parse_start_index = i;
+                    continue;
+                }
+
+                if char == '-' {
+                    program_state = ProgramState::WaitingAfterNegation;
+                    primitives.push(Primitive::Operator(Operator::Negation));
+                    continue;
+                }
+
+                if char.is_whitespace() {
+                    continue;
+                }
+
+                if char == '(' {
+                    primitives.push(Primitive::Brace(Brace::Start));
+                    continue;
+                }
+            }
+            ProgramState::WaitingAfterOperator => {
+                if char.is_whitespace() {
+                    continue;
+                }
+
+                if char == '-' {
+                    program_state = ProgramState::WaitingAfterNegation;
+                    primitives.push(Primitive::Operator(Operator::Negation));
+                    continue;
+                }
+
+                if char.is_ascii_digit() {
+                    program_state = ProgramState::ProcessingInteger;
+                    parse_start_index = i;
+                    continue;
+                }
+
+                if char == '(' {
+                    program_state = ProgramState::WaitingAfterOpenBrace;
+                    primitives.push(Primitive::Brace(Brace::Start));
+                    continue;
+                }
+            }
+        };
         return Err(format!("Unexpected character: {char}"));
     }
 
-    //Calc the value
     match program_state {
-        ProgramState::Started | ProgramState::Idle => Err(String::from("No expression given")),
-        ProgramState::ParseInteger => {
-            parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)
-                .map(|v| Ok(NumberValue::Integer(v)))?
+        ProgramState::Started => return Err("Nothing given".to_string()),
+        ProgramState::FinishedInteger | ProgramState::FinishedFloat => (),
+        ProgramState::ProcessingInteger => {
+            let integer = parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+            primitives.push(Primitive::Number(Number::Integer(integer)));
         }
-        ProgramState::ParseFloat => {
-            parse_float_slice(trimmed, &parse_start_index, &parse_end_index)
-                .map(|v| Ok(NumberValue::Float(v)))?
+        ProgramState::ProcessingFloat => {
+            let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+            primitives.push(Primitive::Number(Number::Float(float)));
         }
-        ProgramState::WaitingDigitAfterFloatPoint => Err(String::from("Orphan point symbol found")),
+        ProgramState::WaitingAfterFloatPoint => return Err("Orphan float point".to_string()),
+        ProgramState::WaitingAfterNegation => return Err("Orphan negation operator".to_string()),
+        ProgramState::WaitingAfterOpenBrace => return Err("Orphan open brace".to_string()),
+        ProgramState::WaitingAfterOperator => return Err("Orphan operator".to_string()),
     }
+
+    display_primitives(&primitives);
+
+    Ok(Number::Integer(1))
 }
 
 fn main() -> ExitCode {
-    let expression = "1";
+    let expression = "-1.1+ -1.019 + 1";
 
     match calculate(expression) {
         Ok(value) => {
             match value {
-                NumberValue::Float(float) => {
+                Number::Float(float) => {
                     println!("float: {float}")
                 }
-                NumberValue::Integer(integer) => {
+                Number::Integer(integer) => {
                     println!("integer: {integer}")
                 }
             }
