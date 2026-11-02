@@ -1,7 +1,5 @@
 use std::process::ExitCode;
 
-use crate::Number::Integer;
-
 #[derive(Eq, PartialEq)]
 enum ProgramState {
     Started,
@@ -84,6 +82,7 @@ fn display_primitives(primitives: &Vec<Primitive>) {
 fn calculate(expression: &str) -> Result<Number, String> {
     let trimmed = expression.trim();
     let mut primitives: Vec<Primitive> = Vec::new();
+    let mut braces_stack: Vec<Brace> = Vec::new();
     let mut program_state: ProgramState = ProgramState::Started;
     let mut parse_start_index: usize = 0;
     let mut parse_end_index: usize = 0;
@@ -104,6 +103,7 @@ fn calculate(expression: &str) -> Result<Number, String> {
                 }
 
                 if char == '(' {
+                    braces_stack.push(Brace::Start);
                     primitives.push(Primitive::Brace(Brace::Start));
                     program_state = ProgramState::WaitingAfterOpenBrace;
                     continue;
@@ -130,6 +130,7 @@ fn calculate(expression: &str) -> Result<Number, String> {
 
                 if char == '(' {
                     program_state = ProgramState::WaitingAfterOpenBrace;
+                    braces_stack.push(Brace::Start);
 
                     let integer =
                         parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
@@ -412,11 +413,11 @@ fn calculate(expression: &str) -> Result<Number, String> {
         ProgramState::Started => return Err("Nothing given".to_string()),
         ProgramState::FinishedInteger | ProgramState::FinishedFloat => (),
         ProgramState::ProcessingInteger => {
-            let integer = parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
+            let integer = parse_integer_slice(trimmed, &parse_start_index, &(trimmed.len() - 1))?;
             primitives.push(Primitive::Number(Number::Integer(integer)));
         }
         ProgramState::ProcessingFloat => {
-            let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
+            let float = parse_float_slice(trimmed, &parse_start_index, &(trimmed.len() - 1))?;
             primitives.push(Primitive::Number(Number::Float(float)));
         }
         ProgramState::WaitingAfterFloatPoint => return Err("Orphan float point".to_string()),
@@ -431,7 +432,7 @@ fn calculate(expression: &str) -> Result<Number, String> {
 }
 
 fn main() -> ExitCode {
-    let expression = "-1.1+ -1.019 + 1";
+    let expression = "-1.1+ -1.019 +   109";
 
     match calculate(expression) {
         Ok(value) => {
