@@ -10,6 +10,7 @@ enum ProgramState {
     WaitingAfterNegation,
     WaitingAfterFloatPoint,
     WaitingAfterOpenBrace,
+    WaitingAfterCloseBrace,
     WaitingAfterOperator,
 }
 
@@ -128,14 +129,14 @@ fn calculate(expression: &str) -> Result<Number, String> {
                     continue;
                 }
 
-                if char == '(' {
-                    program_state = ProgramState::WaitingAfterOpenBrace;
-                    braces_stack.push(Brace::Start);
+                if char == ')' {
+                    program_state = ProgramState::WaitingAfterCloseBrace;
+                    braces_stack.pop().ok_or("Braces mismatch")?;
 
                     let integer =
                         parse_integer_slice(trimmed, &parse_start_index, &parse_end_index)?;
                     primitives.push(Primitive::Number(Number::Integer(integer)));
-                    primitives.push(Primitive::Brace(Brace::Start));
+                    primitives.push(Primitive::Brace(Brace::End));
                     continue;
                 }
 
@@ -194,9 +195,10 @@ fn calculate(expression: &str) -> Result<Number, String> {
                     continue;
                 }
 
-                if char == '(' {
-                    program_state = ProgramState::WaitingAfterOpenBrace;
-                    primitives.push(Primitive::Brace(Brace::Start));
+                if char == ')' {
+                    program_state = ProgramState::WaitingAfterCloseBrace;
+                    braces_stack.pop().ok_or("Braces mismatch")?;
+                    primitives.push(Primitive::Brace(Brace::End));
                     continue;
                 }
 
@@ -244,12 +246,13 @@ fn calculate(expression: &str) -> Result<Number, String> {
                     continue;
                 }
 
-                if char == '(' {
-                    program_state = ProgramState::WaitingAfterOpenBrace;
+                if char == ')' {
+                    program_state = ProgramState::WaitingAfterCloseBrace;
+                    braces_stack.pop().ok_or("Braces mismatch")?;
 
                     let float = parse_float_slice(trimmed, &parse_start_index, &parse_end_index)?;
                     primitives.push(Primitive::Number(Number::Float(float)));
-                    primitives.push(Primitive::Brace(Brace::Start));
+                    primitives.push(Primitive::Brace(Brace::End));
                     continue;
                 }
 
@@ -303,9 +306,10 @@ fn calculate(expression: &str) -> Result<Number, String> {
                     continue;
                 }
 
-                if char == '(' {
-                    program_state = ProgramState::WaitingAfterOpenBrace;
-                    primitives.push(Primitive::Brace(Brace::Start));
+                if char == ')' {
+                    program_state = ProgramState::WaitingAfterCloseBrace;
+                    braces_stack.pop().ok_or("Braces mismatch")?;
+                    primitives.push(Primitive::Brace(Brace::End));
                     continue;
                 }
 
@@ -355,7 +359,6 @@ fn calculate(expression: &str) -> Result<Number, String> {
 
                 if char == '(' {
                     program_state = ProgramState::WaitingAfterOpenBrace;
-
                     primitives.push(Primitive::Brace(Brace::Start));
                     continue;
                 }
@@ -379,6 +382,7 @@ fn calculate(expression: &str) -> Result<Number, String> {
 
                 if char == '(' {
                     primitives.push(Primitive::Brace(Brace::Start));
+                    braces_stack.push(Brace::Start);
                     continue;
                 }
             }
@@ -405,13 +409,61 @@ fn calculate(expression: &str) -> Result<Number, String> {
                     continue;
                 }
             }
+            ProgramState::WaitingAfterCloseBrace => {
+                if char == ')' {
+                    program_state = ProgramState::WaitingAfterCloseBrace;
+                    braces_stack.pop().ok_or("Braces mismatch")?;
+                    primitives.push(Primitive::Brace(Brace::End));
+                    continue;
+                }
+
+                if char == '+' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Addition));
+                    continue;
+                }
+
+                if char == '-' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Subtraction));
+                    continue;
+                }
+
+                if char == '*' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Multiplication));
+                    continue;
+                }
+
+                if char == '/' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Division));
+                    continue;
+                }
+
+                if char == '^' {
+                    program_state = ProgramState::WaitingAfterOperator;
+                    primitives.push(Primitive::Operator(Operator::Exponentiation));
+                    continue;
+                }
+
+                if char.is_ascii_whitespace() {
+                    continue;
+                }
+            }
         };
         return Err(format!("Unexpected character: {char}"));
     }
 
+    if !braces_stack.is_empty() {
+        return Err("Braces mismatch".to_string());
+    }
+
     match program_state {
         ProgramState::Started => return Err("Nothing given".to_string()),
-        ProgramState::FinishedInteger | ProgramState::FinishedFloat => (),
+        ProgramState::FinishedInteger
+        | ProgramState::FinishedFloat
+        | ProgramState::WaitingAfterCloseBrace => (),
         ProgramState::ProcessingInteger => {
             let integer = parse_integer_slice(trimmed, &parse_start_index, &(trimmed.len() - 1))?;
             primitives.push(Primitive::Number(Number::Integer(integer)));
@@ -422,8 +474,8 @@ fn calculate(expression: &str) -> Result<Number, String> {
         }
         ProgramState::WaitingAfterFloatPoint => return Err("Orphan float point".to_string()),
         ProgramState::WaitingAfterNegation => return Err("Orphan negation operator".to_string()),
-        ProgramState::WaitingAfterOpenBrace => return Err("Orphan open brace".to_string()),
         ProgramState::WaitingAfterOperator => return Err("Orphan operator".to_string()),
+        ProgramState::WaitingAfterOpenBrace => return Err("Orphan open brace".to_string()),
     }
 
     display_primitives(&primitives);
@@ -432,7 +484,7 @@ fn calculate(expression: &str) -> Result<Number, String> {
 }
 
 fn main() -> ExitCode {
-    let expression = "-1.1+ -1.019 +   109";
+    let expression = "((-1.1+ 10)) * 4 ^ 5";
 
     match calculate(expression) {
         Ok(value) => {

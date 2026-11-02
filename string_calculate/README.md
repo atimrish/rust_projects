@@ -9,6 +9,7 @@
 - WaitingAfterNegation
 - WaitingAfterFloatPoint
 - WaitingAfterOpenBrace
+- WaitingAfterCloseBrace
 - WaitingAfterOperator
 
 ## Ожидания
