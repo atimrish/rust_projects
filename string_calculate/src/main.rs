@@ -4,9 +4,10 @@ use common::tokenize::tokenize;
 use std::process::ExitCode;
 
 use crate::common::solve::solve;
+use crate::common::utils::display_primitives;
 
 fn main() -> ExitCode {
-    let expression = "1 + 2 * 3";
+    let expression = "((1 + 2) * 3) + 4 + 5 / 9 ^ 2 ^ (3 - 1)";
 
     let primitives = match tokenize(expression) {
         Ok(value) => value,
@@ -28,6 +29,7 @@ fn main() -> ExitCode {
         }
     };
 
+    // display_primitives(&primitives);
     solve(&primitives);
 
     ExitCode::SUCCESS
