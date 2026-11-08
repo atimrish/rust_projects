@@ -1,14 +1,12 @@
 mod common;
 use common::primitives::ProgramError;
+use common::solve::solve;
 use common::tokenize::tokenize;
 use std::process::ExitCode;
 
-use crate::common::solve::solve;
-use crate::common::utils::display_primitives;
-
 fn main() -> ExitCode {
-    let expression = "((1 + 2) * 3) + 4 + 5 / 9 ^ 2 ^ (3 - 1)";
-
+    // let expression = "((1 + 2) * 3) + 4 + 5 / 9 ^ 2 ^ (3 - 1)";
+    let expression = "1+2-3";
     let primitives = match tokenize(expression) {
         Ok(value) => value,
         Err(ProgramError::BracesMismatch) => {
@@ -29,8 +27,10 @@ fn main() -> ExitCode {
         }
     };
 
-    // display_primitives(&primitives);
-    solve(&primitives);
+    match solve(&primitives) {
+        Ok(_) => {}
+        Err(e) => eprintln!("{}", e),
+    }
 
     ExitCode::SUCCESS
 }
