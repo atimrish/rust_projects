@@ -66,5 +66,109 @@ mod tests {
         ];
 
         let result = unwrap_braces(&primitives);
+
+        for (i, _) in result.iter().enumerate() {
+            assert_eq!(result[i], expect[i]);
+        }
+    }
+
+    #[test]
+    fn expression_with_braces() {
+        let primitives: [Primitive; 5] = [
+            Primitive::Brace(Brace::Start),
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(2)),
+            Primitive::Brace(Brace::End),
+        ];
+
+        let expect: [Primitive; 3] = [
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(2)),
+        ];
+
+        let result = unwrap_braces(&primitives);
+
+        for (i, _) in result.iter().enumerate() {
+            assert_eq!(result[i], expect[i]);
+        }
+    }
+
+    #[test]
+    fn expression_with_braces_2() {
+        let primitives: [Primitive; 7] = [
+            Primitive::Brace(Brace::Start),
+            Primitive::Brace(Brace::Start),
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(2)),
+            Primitive::Brace(Brace::End),
+            Primitive::Brace(Brace::End),
+        ];
+
+        let expect: [Primitive; 3] = [
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(2)),
+        ];
+
+        let result = unwrap_braces(&primitives);
+
+        for (i, _) in result.iter().enumerate() {
+            assert_eq!(result[i], expect[i]);
+        }
+    }
+
+    #[test]
+    fn value_without_braces() {
+        let primitives: [Primitive; 1] = [Primitive::Number(Number::Integer(1))];
+        let expect: [Primitive; 1] = [Primitive::Number(Number::Integer(1))];
+        let result = unwrap_braces(&primitives);
+
+        for (i, _) in result.iter().enumerate() {
+            assert_eq!(result[i], expect[i]);
+        }
+    }
+
+    #[test]
+    fn value_with_braces() {
+        let primitives: [Primitive; 3] = [
+            Primitive::Brace(Brace::Start),
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Brace(Brace::End),
+        ];
+        let expect: [Primitive; 1] = [Primitive::Number(Number::Integer(1))];
+        let result = unwrap_braces(&primitives);
+
+        for (i, _) in result.iter().enumerate() {
+            assert_eq!(result[i], expect[i]);
+        }
+    }
+
+    #[test]
+    fn value_with_braces_2() {
+        let primitives: [Primitive; 5] = [
+            Primitive::Brace(Brace::Start),
+            Primitive::Brace(Brace::Start),
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Brace(Brace::End),
+            Primitive::Brace(Brace::End),
+        ];
+        let expect: [Primitive; 1] = [Primitive::Number(Number::Integer(1))];
+        let result = unwrap_braces(&primitives);
+
+        for (i, _) in result.iter().enumerate() {
+            assert_eq!(result[i], expect[i]);
+        }
+    }
+
+    #[test]
+    fn nothing() {
+        let primitives: [Primitive; 0] = [];
+        let expect: [Primitive; 0] = [];
+        let result = unwrap_braces(&primitives);
+
+        assert_eq!(*result, expect)
     }
 }

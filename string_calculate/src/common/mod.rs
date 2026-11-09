@@ -1,6 +1,9 @@
 pub mod primitives;
 pub mod solve;
-pub mod split_expression;
-pub mod tokenize;
-pub mod unwrap_braces;
-pub mod utils;
+mod split_expression;
+mod tokenize;
+mod unwrap_braces;
+mod utils;
+
+use tokenize::tokenize;
+use unwrap_braces::unwrap_braces;

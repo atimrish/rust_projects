@@ -1,11 +1,19 @@
 use std::collections::VecDeque;
 
-use super::primitives::{Number, Operator, Primitive};
+use super::primitives::{Number, Operator, ProgramError};
 use super::split_expression::{SplitExressionResult, split_expression};
-use super::unwrap_braces::unwrap_braces;
+use super::tokenize;
+use super::unwrap_braces;
 
-pub fn solve(primitives: &[Primitive]) -> Result<Number, String> {
-    let mut pending_stack = vec![primitives];
+pub fn solve(expression: &str) -> Result<Number, String> {
+    let primitives = tokenize(expression).map_err(|err| match err {
+        ProgramError::BracesMismatch => "Braces mismatch".to_string(),
+        ProgramError::NothingGiven => "Nothing given".to_string(),
+        ProgramError::Parse => "Parse error".to_string(),
+        ProgramError::UnexpectedCharacter(c) => format!("Unexpected character: {}", c),
+    })?;
+
+    let mut pending_stack = vec![&primitives[..]];
     let mut ready_stack: VecDeque<Number> = VecDeque::new();
     let mut ready_operators: Vec<&Operator> = Vec::new();
 
