@@ -6,12 +6,14 @@ enum SplitExpressionState {
     WaitingStartBrace,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct SubExpression<'a> {
     pub left: &'a [Primitive],
     pub right: &'a [Primitive],
     pub operator: &'a Operator,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum SplitExressionResult<'a> {
     SubExpression(SubExpression<'a>),
     Number(&'a Number),
@@ -115,4 +117,104 @@ pub fn split_expression<'a>(
         right,
         operator: &min_operator,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_expression() {
+        let primitives = [
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(2)),
+        ];
+
+        let expect = SplitExressionResult::SubExpression(SubExpression {
+            left: &[Primitive::Number(Number::Integer(1))],
+            right: &[Primitive::Number(Number::Integer(2))],
+            operator: &Operator::Addition,
+        });
+
+        let Ok(result) = split_expression(&primitives) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn simple_value() {
+        let primitives = [Primitive::Number(Number::Integer(1))];
+        let expect = SplitExressionResult::Number(&Number::Integer(1));
+
+        let Ok(result) = split_expression(&primitives) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn expression_with_braces() {
+        let primitives = [
+            Primitive::Brace(Brace::Start),
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(2)),
+            Primitive::Brace(Brace::End),
+            Primitive::Operator(Operator::Multiplication),
+            Primitive::Number(Number::Integer(3)),
+        ];
+
+        let expect = SplitExressionResult::SubExpression(SubExpression {
+            left: &[
+                Primitive::Brace(Brace::Start),
+                Primitive::Number(Number::Integer(1)),
+                Primitive::Operator(Operator::Addition),
+                Primitive::Number(Number::Integer(2)),
+                Primitive::Brace(Brace::End),
+            ],
+            right: &[Primitive::Number(Number::Integer(3))],
+            operator: &Operator::Multiplication,
+        });
+
+        let Ok(result) = split_expression(&primitives) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn expression_with_priorities() {
+        let primitives = [
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(2)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(3)),
+        ];
+
+        let expect = SplitExressionResult::SubExpression(SubExpression {
+            left: &[
+                Primitive::Number(Number::Integer(1)),
+                Primitive::Operator(Operator::Addition),
+                Primitive::Number(Number::Integer(2)),
+            ],
+            right: &[Primitive::Number(Number::Integer(3))],
+            operator: &Operator::Addition,
+        });
+
+        let Ok(result) = split_expression(&primitives) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
 }
