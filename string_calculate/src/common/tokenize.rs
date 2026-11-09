@@ -245,3 +245,149 @@ pub fn tokenize(expression: &str) -> Result<Vec<Primitive>, ProgramError> {
 
     Ok(primitives)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::primitives::Operator;
+
+    #[test]
+    fn simple_expression() {
+        let expression = "1 + 1";
+        let expect = [
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(1)),
+        ];
+
+        let Ok(result) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn simple_value() {
+        let expression = "1";
+        let expect = [Primitive::Number(Number::Integer(1))];
+
+        let Ok(result) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn negative_integer() {
+        let expression = "-1";
+        let expect = [Primitive::Number(Number::Integer(-1))];
+
+        let Ok(result) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn negative_float() {
+        let expression = "-1.1";
+        let expect = [Primitive::Number(Number::Float(-1.1))];
+
+        let Ok(result) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn negation_expression() {
+        let expression = "1 + -1";
+        let expect = [
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(-1)),
+        ];
+
+        let Ok(result) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn orphan_float_point() {
+        let expression = "1.";
+
+        let Err(error) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(error, ProgramError::UnexpectedCharacter('.'));
+    }
+
+    #[test]
+    fn double_negation() {
+        let expression = "--1";
+
+        let Err(error) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(error, ProgramError::UnexpectedCharacter('-'));
+    }
+
+    #[test]
+    fn braces() {
+        let expression = "(1 + 1)";
+        let expect = [
+            Primitive::Brace(Brace::Start),
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Operator(Operator::Addition),
+            Primitive::Number(Number::Integer(1)),
+            Primitive::Brace(Brace::End),
+        ];
+
+        let Ok(result) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(result, expect);
+    }
+
+    #[test]
+    fn braces_mismatch_start() {
+        let expression = "((1 + 1)";
+
+        let Err(error) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(error, ProgramError::BracesMismatch);
+    }
+
+    #[test]
+    fn braces_mismatch_end() {
+        let expression = "(1 + 1))";
+
+        let Err(error) = tokenize(expression) else {
+            assert!(false);
+            return;
+        };
+
+        assert_eq!(error, ProgramError::BracesMismatch);
+    }
+}
